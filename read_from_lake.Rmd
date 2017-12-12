@@ -1,13 +1,29 @@
+---
+title: "RCL Example"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+
+
+```{r}
 
 library(httr)
 library(jsonlite)
 library(curl)
+library(lubridate)
+library(stringr)
+library(plyr)
 
 # Setup
 profile_name="profile01"
 credentials_file="~/.ssh/credentials.json"
 datafile="data.csv"
+```
 
+Setup access to the Azure Data Lake...
+```{r}
 # Get credentials from config file
 config <- fromJSON(txt=credentials_file)
 
@@ -36,10 +52,20 @@ r <- httr::GET(my_url,add_headers(Authorization = paste0("Bearer ", res$access_t
 my_url <- paste0("https://", datastore_name, ".azuredatalakestore.net/webhdfs/v1/", datafile, "?op=OPEN&read=true")
 
 dataRaw <- httr::GET(my_url, add_headers(Authorization = paste0("Bearer ", res$access_token)))
+```
 
+Copy the datafile from ADL and read it back in. In a production environment we would do this directly using 
+ADLA but for now, we use a local copy.
+
+```{r writeCSV}
 writeBin(content(dataRaw), datafile)
 data <- read.csv(datafile)
 
+```
+
+Start by some basic cleanup of the data such as converting the string date column into a posixt format.
+
+```{r}
 
 ## Clean up the Data
 # Create a new column, pTime, containing posixt timestamp 
@@ -52,14 +78,26 @@ data$hour <- str_pad(hour(data$pTime), 2, pad = "0")
 data$minute <- str_pad(minute(data$pTime), 2, pad = "0")
 
 data$hourminute <- paste0( data$hour, ":", data$minute)
-                          
+      
+```
+
+Once that's done, explore the data:
+
+```{r}
+
 # Get a feel for the data
 # How many days does our dataset cover?
 
 print(levels(as.factor(date(data$pTime))))
 
-levels(as.factor(date(data$pTime))) %>% length 
+dayrange <- levels(as.factor(date(data$pTime))) %>% length 
 
+print(dayrange)
+```
+
+We can look at the mean consumption by hour:
+
+```{r}
 # Look at the mean consumption by hour
 #hourlyConsumption <- ddply(data, .(hourminute), summarize, mean=mean(TotalConsmp))
 hourlyConsumption <- ddply(data, .(hour), summarize, mean=mean(TotalConsmp))
@@ -73,7 +111,7 @@ barplot(
   ylab="Mean Wattage", 
   names.arg=hourlyConsumption$timeOfDay 
   )
-
-
+dev.off()
+```
 
 
